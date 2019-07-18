@@ -24,4 +24,4 @@ source('server.R')
 #source('data.R')
 
 
-shinyApp(ui, server, options = list(port = 1337))
+shinyApp(ui, server, options = list(port = 3838))
