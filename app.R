@@ -1,3 +1,4 @@
+source('requirements.R')
 
 shh <- suppressPackageStartupMessages
 shh(library(shiny))
