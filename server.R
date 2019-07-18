@@ -1,23 +1,3 @@
-shh <- suppressPackageStartupMessages
-shh(library(shiny))
-shh(library(glue))
-shh(library(stringr))
-shh(library(rjson))
-
-shh(library(ggplot2))
-shh(library(readxl))
-shh(library(stringr))
-shh(library(dplyr))
-shh(library(yaml))
-shh(library(purrr))
-
-shh(library(ArmourEverTesty))
-shh(library(lubridate))
-
-shh(library(cowplot))
-
-options(warn = -1)
-
 server <- function(input, output, session){
    #output$MAXGROUPS <- 10
    # =================================================
