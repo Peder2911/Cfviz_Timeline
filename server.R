@@ -1,19 +1,47 @@
+shh <- suppressPackageStartupMessages
+shh(library(shiny))
+shh(library(glue))
+shh(library(stringr))
+shh(library(rjson))
+
+shh(library(ggplot2))
+shh(library(readxl))
+shh(library(stringr))
+shh(library(dplyr))
+shh(library(yaml))
+shh(library(purrr))
+
+shh(library(ArmourEverTesty))
+shh(library(lubridate))
+
+shh(library(cowplot))
+
+options(warn = -1)
+
+setwd('/srv/shiny-server/cfplot')
+saveRDS(c(1,2,3),'/srv/shiny-server/cfplot/eep.rds')
+
+
 server <- function(input, output, session){
    #output$MAXGROUPS <- 10
    # =================================================
 
    nocache <- '--nocache' %in% commandArgs(trailingOnly = TRUE)
+
+   nocache <- TRUE
+
    fixUcdp <- dget('functions/fixUcdp.R')
-   
    ucdp <- read.csv('data/ucdp-dyadic-191.csv') %>% fixUcdp()
 
    # Ceasefire Data ==================================
-   arglen <- length(commandArgs(trailingOnly = TRUE))
-   dataname <- commandArgs(trailingOnly = TRUE)[arglen]
+   #arglen <- length(commandArgs(trailingOnly = TRUE))
+   #dataname <- commandArgs(trailingOnly = TRUE)[arglen]
    # Remove ext. if it was added
-   dataname <- str_replace(dataname,'\\.xlsx','')
+   #dataname <- str_replace(dataname,'\\.xlsx','')
 
+   dataname <- 'cf_4_3'
    hascache <- any(str_detect(list.files('cache'),'\\.rds'))
+   hascache <- FALSE
 
    if(hascache & !nocache){
       filename <- paste0(dataname,'.rds')
