@@ -1,186 +1,146 @@
 
 server <- function(input, output, session){
    #output$MAXGROUPS <- 10
+   # =================================================
+
+   nocache <- '--nocache' %in% commandArgs(trailingOnly = TRUE)
+   fixUcdp <- dget('functions/fixUcdp.R')
    
-   cfs_raw <- suppressWarnings(read_xlsx('data/cfs_4_3.xlsx'))
-   nameDictionary <- read_yaml('data/names.yaml') 
    ucdp <- read.csv('data/ucdp-dyadic-191.csv') %>% fixUcdp()
-   cfs <- cfs_raw
 
-   updateSelectInput(session,'location',choices = sort(unique(cfs_raw$Location)))
+   # Ceasefire Data ==================================
+   arglen <- length(commandArgs(trailingOnly = TRUE))
+   dataname <- commandArgs(trailingOnly = TRUE)[arglen]
+   # Remove ext. if it was added
+   dataname <- str_replace(dataname,'\\.xlsx','')
 
+   hascache <- any(str_detect(list.files('cache'),'\\.rds'))
+
+   if(hascache & !nocache){
+      filename <- paste0(dataname,'.rds')
+      if(!filename %in% list.files('cache')) {
+         stop(glue('data/{filename} not found!'))
+      }
+
+      cfs <- readRDS(glue('cache/{filename}'))
+
+   } else {
+      filename <- paste0(dataname,'.xlsx')
+      if(!filename %in% list.files('data')){
+         stop(glue('data/{filename} not found!'))
+      }
+
+      nameDictionary <- read_yaml('data/names.yaml') 
+
+      fixCfs <- dget('functions/fixCfs.R') 
+      cfs <- suppressWarnings(read_xlsx(paste0('data/',filename))) %>%
+         fixCfs(nameDictionary)
+
+      cfs <- cfs[!is.na(cfs$year),]
+
+      writeLines(glue('Caching {dataname}'))
+      saveRDS(cfs,glue('cache/{dataname}.rds'))
+   }
+
+   # Deprecated ======================================
+   #locations <- c('a','b','c')
+   #dates <- seq(as.Date('1999-01-01'),as.Date('2000-01-01'), by = 'years')
+   #ectors <- c('a','b','c') 
+   #cfids <- 1:10
+
+   # Server Logic ====================================
+   ulocations <- sort(unique(cfs$location))
+   updateSelectInput(session,'location',choices = ulocations)
+
+   # Update info when Location changes ===============
    observeEvent(input$location,{
-   # Refresh the data
-      withProgress({
-         cfs <- cfs_raw
-   
-         names(cfs) <- str_to_lower(names(cfs))
-   
-         cfs$start_date <- suppressWarnings(varsToDates(list(year = cfs$cf_dec_yr,
-                                            month = cfs$cf_dec_month,
-                                            day = cfs$cf_dec_day))) 
+      cfs_sub <- cfs %>%
+         filter(location == input$location)
 
-         cfs$end_date <- suppressWarnings(varsToDates(list(year = cfs$end_yr,
-                                            month = cfs$end_month,
-                                            day = cfs$end_day)))
+      actors <- tibble(Actors = sort(unique(cfs_sub$name)))
+      output$allactors <- renderTable(actors, striped = FALSE)
 
-         cfs$actor_name <- str_replace_all(cfs$actor_name,'\\s',' ')
+      updateNumericInput(session,'startyear',
+                         value = min(cfs_sub$year))
+      updateNumericInput(session,'endyear',
+                         value = max(cfs_sub$year))
+      updateCheckboxGroupInput(session,'include_actors',
+                        choices = unique(cfs_sub$name))
+      updateCheckboxGroupInput(session,'grouped_actors',
+                        choices = unique(cfs_sub$name))
+      updateCheckboxGroupInput(session,'include_ids',
+                        choices = unique(sort(as.numeric(cfs_sub$id))))
 
-         cfs$type <- dictlookup(cfs$ceasefire_type, nameDictionary$types)
-         cfs$purpose <- dictlookup(cfs$purpose_1, nameDictionary$purposes)
-   
-         cfs <- cfs %>%
-            select(
-               location,
-               start = start_date,
-               end = end_date,
-               id = cf_id,
-               actor_name,
-               ucdp_dyad,
-               purpose,
-               type,
-               name = actor_name) %>%
-            filter(location == input$location) %>%
-            unique()
-         
-         actors <- tibble(Actors = cfs$name %>%
-            unique() %>%
-            sort())
+      output$plot <- NULL
 
-         output$allactors <- renderTable(actors, striped = FALSE)
-
-         updateDateRangeInput(session,'daterange', 
-                              start = min(cfs$start), end = max(cfs$start))
-         updateCheckboxGroupInput(session,'exclude_actors',
-                           choices = unique(cfs$name))
-         updateCheckboxGroupInput(session,'exclude_ids',
-                           choices = unique(sort(as.numeric(cfs$id))))
-         cfs <<- cfs
-      })       
+      # Necessary?
+      cfs_sub <<- cfs_sub
    })
 
+   # Make a plot with current settings ===============
    observeEvent(input$plot,{
-      cfs$year <- year(cfs$start)
+      timeline <- dget('functions/timeline.R')
+      nameCfs <- dget('functions/nameCfs.R')
+      conditionalSubset <- dget('functions/conditionalSubset.R')
 
-      if(input$naming == 'Custom'){
-         cfs <- mutate(cfs,
-                       name = dictReplace(name ,groups(),input$defaultgroup))
-      } 
-      if (input$naming == 'UCDP'){
-         cfs$ucdp_dyad <- as.numeric(cfs$ucdp_dyad)
-         cfs <- merge(cfs, ucdp, by.x = 'ucdp_dyad', by.y = 'id', all.x = TRUE)
-         cfs$name <- cfs$actor_name
-         excluded <- character()
-      } else {
-         cfs$ucdp_dyad <- -1
-         cfs <- cfs %>%
-            group_by(start, end, year, purpose, type, location) %>%
-               summarize(name = glue_collapse(sort(unique(name)), sep = ' - '),
-                         ucdp_dyad = min(ucdp_dyad),
-                         id = min(id))
-      }
+      tldata <- nameCfs(cfs_sub, ucdp, input, groups)
 
-      tldata <- cfs %>%
-         filter(start >= input$daterange[1],
-                start <= input$daterange[2],
-                #!input$exclude | !name %in% input$excluded,
-                !input$exclude | !id %in% input$exclude_ids)
+      output$debugdat <- renderTable(arrange(tldata[c('id','year','name')], id))
+      allids <- min(tldata$id):max(tldata$id)
+      missingids <- allids[!allids %in% tldata$id] %>%
+         glue_collapse(sep = ', ')
+      output$missingids <- renderText(glue('Missing these IDs: {missingids}'))
 
-      tl <- ggplot(tldata) + 
-        geom_histogram(aes(x = year, fill = name), 
-                       binwidth = 1)+
-        theme_classic()+
-        theme(axis.line.y = element_blank(),
-              axis.title.y = element_text(size = 10),
-              axis.title.x = element_blank(),
-              axis.text.x = element_text(angle = 45,
-                                         hjust = 1),
-              panel.grid.major.x = element_line(color = 'gray'),
-              panel.grid.minor.x = element_line(color = 'light gray'),
-              legend.position = 'bottom',
-              legend.title = element_blank(),
-              legend.key.size = unit(0.2,units = 'cm'),
-              legend.spacing.x = unit(0.1,units = 'cm'),
-              legend.margin = margin(t = 0.1,r = 0.1,b = 0.1,l = 0.1, unit = 'cm'),
-              plot.margin = margin(t = 0.3,l = 0.1,r = 0.3,unit = 'cm')) +
-        scale_y_continuous(expand = c(0,0),
-                           breaks = seq(0,10,2),
-                           limits = c(0,10)) +
-        scale_x_continuous(expand = c(0,0),
-                           breaks = seq(1989, 2018, 1),
-                           limits = c(year(input$daterange[1]), 
-                                      year(input$daterange[2]))) +
-        labs(y = '')
-     output$plot <- renderPlot(tl)
+      tldata <- conditionalSubset(tldata,input)
+
+      timelineplot <- timeline(tldata,input)
+      currentPlot <<- timelineplot
+
+      #output$fromplot <- renderTable(timelineplot$data)
+      output$plot <- renderPlot(timelineplot)
    })
 
-   locations <- c('a','b','c')
-   dates <- seq(as.Date('1999-01-01'),as.Date('2000-01-01'), by = 'years')
-   actors <- c('a','b','c') 
-   cfids <- 1:10
+   output$download <- downloadHandler(filename = 'plot.zip',
+      content = function(file){
 
+         dir <- tempdir()
+         stuff <- character()
 
-   observeEvent(input$pushgroup,{
-      updateSelectInput(session,'nfields',selected = as.numeric(input$nfields) + 1)
-   })
+         if(input$separatelegend){
 
-   observeEvent(input$popgroup,{
-      updateSelectInput(session,'nfields',selected = as.numeric(input$nfields) - 1)
-   })
-
-   output$location <- renderUI({selectInput('location','Location',locations)})
-
-   output$daterange <- renderUI({
-      dateRangeInput('daterange', 'Date range', 
-                     start = min(dates, na.rm = T),end = max(dates, na.rm = T))
-   })
-
-   output$exclude <- renderUI({
-      inputPanel(
-         checkboxGroupInput('exclude_actors','Actors',actors),
-         checkboxGroupInput('exclude_ids','IDs',cfids)
-      )
-   })
-
-   output$fields <- renderUI({
-
-      fields <- list()
-
-      for(f in 1:input$nfields){
-
-         fid <- glue('field_{f}')
-
-         x <- ""
-         y <- ""
-         if(glue('{fid}_x') %in% names(input)){
-            isolate({
-               x <- input[[glue('{fid}_x')]] 
-               y <- input[[glue('{fid}_y')]] 
-            })
+            legend <- get_legend(currentPlot + theme(legend.position = 'right'))
+            stuff[2] <- glue('{dir}/legend.{input$plotformat}')
+            ggsave(stuff[2], legend, device = input$plotformat,
+                height = input$plotheight, width = input$plotwidth,
+                units = input$units)
          }
-
-         fields[[f]] <- tags$div(id = glue(fid),
-            inputPanel(
-               #HTML(glue('Group {f}')),
-               textInput(glue('{fid}_x'),'Name:',x),
-               textInput(glue('{fid}_y'),'Expression(s):',y))
-         )
+         
+         stuff[1] <- glue('{dir}/plot.{input$plotformat}') 
+         ggsave(stuff[1],currentPlot, device = input$plotformat,
+                height = input$plotheight, width = input$plotwidth,
+                units = input$units)
+         zip(file, stuff, flags = '-r9Xj')
       }
-      fields
+   )
+
+
+
+   observeEvent(input$clearincl,{
+      walk(c('include_actors','include_ids'), function(id){
+         updateCheckboxGroupInput(session,id,selected = character())
+      })
+   })
+   observeEvent(input$cleargrouped,{
+      updateCheckboxGroupInput(session,'grouped_actors',selected = character())
    })
 
-
-   groups <- reactive({
-      groups <- list()
-      if(input$nfields > 0){
-         for(f in 1:input$nfields){
-            name <- input[[glue('field_{f}_x')]]
-            expr <- input[[glue('field_{f}_y')]]
-            groups[[name]] <- expr
-         }
-         groups
-      } else {
-         groups
-      }  
+   observeEvent(input$allgrouped,{
+      updateCheckboxGroupInput(session,'grouped_actors',
+                               selected = unique(cfs_sub$name))
+   })
+   observeEvent(input$allincl,{
+      updateCheckboxGroupInput(session,'include_actors',
+                               selected = unique(cfs_sub$name))
    })
 }
+

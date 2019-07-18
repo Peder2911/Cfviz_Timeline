@@ -10,13 +10,19 @@ shh(library(readxl))
 shh(library(stringr))
 shh(library(dplyr))
 shh(library(yaml))
+shh(library(purrr))
+
+shh(library(ArmourEverTesty))
+shh(library(lubridate))
+
+shh(library(cowplot))
 
 options(warn = -1)
 
 source('ui.R')
 source('server.R')
-source('functions.R')
-source('data.R')
+#source('functions.R')
+#source('data.R')
 
 
 shinyApp(ui, server, options = list(port = 1337))
