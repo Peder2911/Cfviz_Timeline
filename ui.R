@@ -37,7 +37,6 @@ ui <- fluidPage(
    sidebarPanel(
       # =================================================
       fluidRow(
-         #uiOutput('location'),
          selectInput('location','Location',NULL),
          actionButton('plot','Plot')
       ),
@@ -48,24 +47,24 @@ ui <- fluidPage(
          #actionButton('refresh','Refresh'),
          numericInput('startyear','Start year',1989, min = 1989),
          numericInput('endyear','End year',2019, max = 1989)
-         #dateRangeInput('daterange','Date range'),
-         #uiOutput('daterange')
       ),
       tags$hr(),
       fluidRow(
-         selectInput('naming','Naming scheme',c('Actor names','UCDP'))
-         #tableOutput('allactors')
+         selectInput('naming','Naming scheme',c('Actor names','UCDP')),
+         conditionalPanel('input.naming == \'Actor names\'',
+            checkboxInput('usegroup','Group actors'))
       ),
 
-      # Others grouping =================================
-      tags$hr(),
-      fluidRow(
-         checkboxInput('usegroup','Group actors'),
-         conditionalPanel('input.usegroup == true',
-            actionButton('cleargrouped','Clear'),
-            actionButton('allgrouped','Select all'),
-            textInput('groupname','Group name:','Others'),
-            checkboxGroupInput('grouped_actors', 'Grouped actors:', NULL)
+      # Grouping ========================================
+      conditionalPanel('input.naming == \'Actor names\' && input.usegroup',
+         tags$hr(),
+         fluidRow(
+            selectInput('ngroups','Number of groups:',1:10),
+            uiOutput("groupnames")
+         ),
+         tags$hr(),
+         fluidRow(
+            uiOutput("grouping")
          )
       ),
 

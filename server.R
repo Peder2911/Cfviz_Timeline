@@ -1,85 +1,57 @@
-shh <- suppressPackageStartupMessages
-shh(library(shiny))
-shh(library(glue))
-shh(library(stringr))
-shh(library(rjson))
-
-shh(library(ggplot2))
-shh(library(readxl))
-shh(library(stringr))
-shh(library(dplyr))
-shh(library(yaml))
-shh(library(purrr))
-
-shh(library(ArmourEverTesty))
-shh(library(lubridate))
-
-shh(library(cowplot))
-
-options(warn = -1)
-
-setwd('/srv/shiny-server/cfplot')
-saveRDS(c(1,2,3),'/srv/shiny-server/cfplot/eep.rds')
-
-
 server <- function(input, output, session){
-   #output$MAXGROUPS <- 10
-   # =================================================
 
+   latestVersion <- dget('functions/latestVersion.R')
+   fixCfs <- dget('functions/fixCfs.R') 
+
+   # Not implemented
+   # fixUcdp <- dget('functions/fixUcdp.R')
+   # ucdp <- read.csv(latestVersion('data','ucdp')$path) %>% fixUcdp()
+
+   # =================================================
+   # Data setup ======================================
+   # =================================================
+   # Will try to use the latest version based on 
+   # numeric versioning ("cf_4_3" is v.43) and so on
+
+   hascache <- any(str_detect(list.files('cache'),'\\.rds'))
    nocache <- '--nocache' %in% commandArgs(trailingOnly = TRUE)
 
-   nocache <- TRUE
+   if(hascache){
+      cachefile <- latestVersion('cache','cf')
+      datafile <- latestVersion('data','cf')
+      newerdata <- datafile$version > cachefile$version
+   } else {
+      newerdata <- TRUE
+   }
 
-   fixUcdp <- dget('functions/fixUcdp.R')
-   ucdp <- read.csv('data/ucdp-dyadic-191.csv') %>% fixUcdp()
 
-   # Ceasefire Data ==================================
-   #arglen <- length(commandArgs(trailingOnly = TRUE))
-   #dataname <- commandArgs(trailingOnly = TRUE)[arglen]
-   # Remove ext. if it was added
-   #dataname <- str_replace(dataname,'\\.xlsx','')
-
-   dataname <- 'cf_4_3'
-   hascache <- any(str_detect(list.files('cache'),'\\.rds'))
-   hascache <- FALSE
-
-   if(hascache & !nocache){
-      filename <- paste0(dataname,'.rds')
-      if(!filename %in% list.files('cache')) {
-         stop(glue('data/{filename} not found!'))
-      }
-
-      cfs <- readRDS(glue('cache/{filename}'))
+   if(hascache & !nocache & !newerdata){
+      cachepath <- latestVersion('cache','cf')$path
+      cfs <- readRDS(cachepath)
 
    } else {
-      filename <- paste0(dataname,'.xlsx')
-      if(!filename %in% list.files('data')){
-         stop(glue('data/{filename} not found!'))
-      }
-
+      datafile <- latestVersion('data','cf')
       nameDictionary <- read_yaml('data/names.yaml') 
 
-      fixCfs <- dget('functions/fixCfs.R') 
-      cfs <- suppressWarnings(read_xlsx(paste0('data/',filename))) %>%
+      writeLines(glue('Using {datafile$filename}'))
+      cfs <- suppressWarnings(read_xlsx(datafile$path)) %>%
          fixCfs(nameDictionary)
 
       cfs <- cfs[!is.na(cfs$year),]
-
-      writeLines(glue('Caching {dataname}'))
-      saveRDS(cfs,glue('cache/{dataname}.rds'))
+      writeLines(glue('Caching {datafile$filename}'))
+      saveRDS(cfs,glue('cache/{datafile$filename}.rds'))
    }
 
-   # Deprecated ======================================
-   #locations <- c('a','b','c')
-   #dates <- seq(as.Date('1999-01-01'),as.Date('2000-01-01'), by = 'years')
-   #ectors <- c('a','b','c') 
-   #cfids <- 1:10
-
+   # =================================================
    # Server Logic ====================================
+   # =================================================
+
    ulocations <- sort(unique(cfs$location))
    updateSelectInput(session,'location',choices = ulocations)
+   ngroups <- 1
 
-   # Update info when Location changes ===============
+   # =================================================
+   # Refresh info ====================================
    observeEvent(input$location,{
       cfs_sub <- cfs %>%
          filter(location == input$location)
@@ -100,33 +72,90 @@ server <- function(input, output, session){
 
       output$plot <- NULL
 
+      # Grouping ui =====================================
+      output$grouping <- renderUI({
+         unique_names <- unique(cfs_sub$name)
+         boxes <- list()
+
+         for(i in 1:length(unique_names)){
+            boxes[[i]] <- selectInput(glue('actor_{i}_group'),
+                                      label = unique_names[i],
+                                      choices = c('No group'))
+         }
+         boxes
+      })
+
       # Necessary?
       cfs_sub <<- cfs_sub
    })
 
-   # Make a plot with current settings ===============
+   # =================================================
+   # Group naming ====================================
+   # Create a panel with textboxes where group names
+   # are specified.
+   output$groupnames <- renderUI({
+      groups <- list()
+      for(group in 1:input$ngroups){
+         groupname <- glue('group_{group}_name')
+         if(groupname %in% names(input)){
+            selected <- isolate(input[[groupname]])
+         } else {
+            selected <- 'Others'
+         }
+         groups[[group]] <- textInput(glue('group_{group}_name'),
+                                      label = glue('Group {group}:'),
+                                      selected)
+
+         # Really ugly, but necessary?
+         for(name in names(input)){
+            if(str_detect(name,'actor_[0-9]{1,3}_group')){
+               selected <- isolate(input[[name]])
+               if(selected > input$ngroups){
+                  selected <- 'No group'
+               }
+               updateSelectInput(session, name,
+                                 choices = c('No group',
+                                             as.character(1:input$ngroups)),
+                                 selected = selected)
+            }
+         }
+      }
+      groups
+   })
+
+   # =================================================
+   # Plot ============================================
    observeEvent(input$plot,{
       timeline <- dget('functions/timeline.R')
       nameCfs <- dget('functions/nameCfs.R')
       conditionalSubset <- dget('functions/conditionalSubset.R')
 
-      tldata <- nameCfs(cfs_sub, ucdp, input, groups)
+      # Figure out naming ===============================
+      tldata <- nameCfs(cfs_sub, ucdp,
+                        input = input,
+                        groups = groups,
+                        usegroups = input$usegroup)
+      # for debug
+      tee <- tldata
 
-      output$debugdat <- renderTable(arrange(tldata[c('id','year','name')], id))
-      allids <- min(tldata$id):max(tldata$id)
-      missingids <- allids[!allids %in% tldata$id] %>%
-         glue_collapse(sep = ', ')
-      output$missingids <- renderText(glue('Missing these IDs: {missingids}'))
-
+      # Only display included ===========================
       tldata <- conditionalSubset(tldata,input)
 
+      # Plot ============================================
       timelineplot <- timeline(tldata,input)
       currentPlot <<- timelineplot
-
-      #output$fromplot <- renderTable(timelineplot$data)
       output$plot <- renderPlot(timelineplot)
+
+      # Debug stuff =====================================
+      output$debugdat <- renderTable(arrange(tee[c('id','year','name')], id))
+      allids <- min(tee$id):max(tee$id)
+      missingids <- allids[!allids %in% tee$id] %>%
+         glue_collapse(sep = ', ')
+      output$missingids <- renderText(glue('Missing these IDs: {missingids}'))
    })
 
+   # =================================================
+   # Handle downloads ================================
    output$download <- downloadHandler(filename = 'plot.zip',
       content = function(file){
 
@@ -149,25 +178,15 @@ server <- function(input, output, session){
          zip(file, stuff, flags = '-r9Xj')
       }
    )
-
-
-
+   
+   # Clear / all =====================================
    observeEvent(input$clearincl,{
       walk(c('include_actors','include_ids'), function(id){
          updateCheckboxGroupInput(session,id,selected = character())
       })
-   })
-   observeEvent(input$cleargrouped,{
-      updateCheckboxGroupInput(session,'grouped_actors',selected = character())
-   })
-
-   observeEvent(input$allgrouped,{
-      updateCheckboxGroupInput(session,'grouped_actors',
-                               selected = unique(cfs_sub$name))
    })
    observeEvent(input$allincl,{
       updateCheckboxGroupInput(session,'include_actors',
                                selected = unique(cfs_sub$name))
    })
 }
-

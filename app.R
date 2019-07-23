@@ -1,8 +1,6 @@
 shh <- suppressPackageStartupMessages
-shh(library(shiny))
 shh(library(glue))
 shh(library(stringr))
-shh(library(rjson))
 
 shh(library(ggplot2))
 shh(library(readxl))
@@ -10,11 +8,13 @@ shh(library(stringr))
 shh(library(dplyr))
 shh(library(yaml))
 shh(library(purrr))
-
-shh(library(ArmourEverTesty))
 shh(library(lubridate))
 
+shh(library(rjson))
 shh(library(cowplot))
+shh(library(shiny))
+
+shh(library(ArmourEverTesty))
 
 options(warn = -1)
 

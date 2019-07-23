@@ -1,11 +1,45 @@
 
-function(cfs_sub, ucdp, input, groups){
+function(cfs_sub, ucdp, input, usegroups, groups){
+
+   # =================================================
+   # Grouping ========================================
+   # This one is made a bit  complex by the fact that 
+   # the UI is adaptive. 
+   
+   # Really quite simple: 
+   # the appropriate info from "input" using glue
+   # and regular expressions 
    if(input$usegroup){
-      cfs_sub$name <- ifelse(cfs_sub$name %in% input$grouped_actors,
-                          input$groupname,
-                          cfs_sub$name)
+      actornames <- unique(cfs_sub$name)
+
+      actorgroup <- character(length(actornames))
+      names(actorgroup) <- actornames
+
+      for(name in names(input)){
+         if(str_detect(name, 'actor_[0-9]{1,3}_group$')){
+            actornumber <- as.numeric(str_extract(name,'[0-9]+'))
+
+            if(input[[name]] == 'No group'){
+               actorgroup[actornumber] <- 'No group' 
+            } else {
+               # Get the group name from
+               # appropriate box
+               groupnumber <- as.numeric(input[[name]])
+               groupname <- isolate(input[[glue('group_{groupnumber}_name')]])
+               print(glue('Adding {groupname} to {name}'))
+               actorgroup[actornumber] <- groupname
+            }
+
+         }
+      }
+
+      cfs_sub$name <- ifelse(actorgroup[cfs_sub$name] != 'No group',
+                             actorgroup[cfs_sub$name],
+                             cfs_sub$name)
    } 
 
+   # =================================================
+   # UCDP naming =====================================
    if (input$naming == 'UCDP'){
       cfs_sub$ucdp_dyad <- as.numeric(cfs_sub$ucdp_dyad)
       cfs_sub <- merge(cfs_sub, ucdp, 
@@ -21,14 +55,16 @@ function(cfs_sub, ucdp, input, groups){
                                                 sep = ' & '),
                       id = min(id))
       cfs_sub <- unique(cfs_sub)
-      #excluded <- character()
+
+   # =================================================
+   # Actor naming ====================================
    } else {
       cfs_sub$ucdp_dyad <- -1
       cfs_sub <- cfs_sub %>%
          group_by(start, year, purpose, type, location, id) %>%
             summarize(name = glue_collapse(sort(unique(name)), sep = ' - '),
                       ucdp_dyad = min(ucdp_dyad))
-                      #id = min(id))
    }
+
    cfs_sub
 }

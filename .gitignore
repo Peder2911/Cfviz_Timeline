@@ -2,7 +2,9 @@
 data/*
 !data/.gitkeep
 !data/names.yaml
-tee/*
-!tee/.gitkeep
+
+cache/*
+!cache/.gitkeep
+
 *.swp
 .*
