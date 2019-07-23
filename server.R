@@ -1,3 +1,23 @@
+shh <- suppressPackageStartupMessages
+shh(library(glue))
+shh(library(stringr))
+
+shh(library(ggplot2))
+shh(library(readxl))
+shh(library(stringr))
+shh(library(dplyr))
+shh(library(yaml))
+shh(library(purrr))
+shh(library(lubridate))
+
+shh(library(rjson))
+shh(library(cowplot))
+shh(library(shiny))
+
+shh(library(ArmourEverTesty))
+
+options(warn = -1)
+
 server <- function(input, output, session){
 
    latestVersion <- dget('functions/latestVersion.R')
@@ -12,13 +32,16 @@ server <- function(input, output, session){
    # =================================================
    # Will try to use the latest version based on 
    # numeric versioning ("cf_4_3" is v.43) and so on
+   cachedir <- 'cache'
+   datadir <- 'data' 
+   print(datadir)
 
-   hascache <- any(str_detect(list.files('cache'),'\\.rds'))
+   hascache <- any(str_detect(list.files(cachedir),'\\.rds'))
    nocache <- '--nocache' %in% commandArgs(trailingOnly = TRUE)
 
    if(hascache){
-      cachefile <- latestVersion('cache','cf')
-      datafile <- latestVersion('data','cf')
+      cachefile <- latestVersion(cachedir,'cf')
+      datafile <- latestVersion(datadir,'cf')
       newerdata <- datafile$version > cachefile$version
    } else {
       newerdata <- TRUE
@@ -26,12 +49,12 @@ server <- function(input, output, session){
 
 
    if(hascache & !nocache & !newerdata){
-      cachepath <- latestVersion('cache','cf')$path
+      cachepath <- latestVersion(cachedir,'cf')$path
       cfs <- readRDS(cachepath)
 
    } else {
-      datafile <- latestVersion('data','cf')
-      nameDictionary <- read_yaml('data/names.yaml') 
+      datafile <- latestVersion(datadir,'cf')
+      nameDictionary <- read_yaml(glue('{datadir}/names.yaml'))
 
       writeLines(glue('Using {datafile$filename}'))
       cfs <- suppressWarnings(read_xlsx(datafile$path)) %>%
@@ -39,7 +62,7 @@ server <- function(input, output, session){
 
       cfs <- cfs[!is.na(cfs$year),]
       writeLines(glue('Caching {datafile$filename}'))
-      saveRDS(cfs,glue('cache/{datafile$filename}.rds'))
+      saveRDS(cfs,glue('{cachedir}/{datafile$filename}.rds'))
    }
 
    # =================================================
