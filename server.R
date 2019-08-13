@@ -1,115 +1,85 @@
 shh <- suppressPackageStartupMessages
+
 shh(library(glue))
 shh(library(stringr))
-
+#
 shh(library(ggplot2))
-shh(library(readxl))
+#shh(library(readxl))
 shh(library(stringr))
 shh(library(dplyr))
 shh(library(yaml))
 shh(library(purrr))
 shh(library(lubridate))
 
-shh(library(rjson))
-shh(library(cowplot))
-shh(library(shiny))
+#shh(library(rjson))
+#shh(library(cowplot))
 
-shh(library(ArmourEverTesty))
+shh(library(RPostgreSQL))
 
 options(warn = -1)
 
+# ================================
+
+latestversion <- dget('functions/latestversion.R')
+fixCfs <- dget('functions/fixCfs.R') 
+timeline <- dget('functions/timeline.R')
+nameCfs <- dget('functions/nameCfs.R')
+conditionalSubset <- dget('functions/conditionalSubset.R')
+varsToDates <- dget('functions/varsToDates.R')
+
+# ================================
+fpath <- Sys.getenv('TL_CONFIG')
+if(fpath == ""){
+   fpath <- 'config.Robj'
+}
+config <- dget(fpath)
+con_config <- config$con
+
+# ================================
+dr <- dbDriver('PostgreSQL')
+con_config$dr <- dr
+
+# ================================
+
 server <- function(input, output, session){
-
-   latestVersion <- dget('functions/latestVersion.R')
-   fixCfs <- dget('functions/fixCfs.R') 
-
-   # Not implemented
-   # fixUcdp <- dget('functions/fixUcdp.R')
-   # ucdp <- read.csv(latestVersion('data','ucdp')$path) %>% fixUcdp()
-
-   # =================================================
-   # Data setup ======================================
-   # =================================================
-   # Will try to use the latest version based on 
-   # numeric versioning ("cf_4_3" is v.43) and so on
-   cachedir <- 'cache'
-   datadir <- 'data' 
-   print(datadir)
-
-   hascache <- any(str_detect(list.files(cachedir),'\\.rds'))
-   nocache <- '--nocache' %in% commandArgs(trailingOnly = TRUE)
-
-   if(hascache){
-      cachefile <- latestVersion(cachedir,'cf')
-      datafile <- latestVersion(datadir,'cf')
-      newerdata <- datafile$version > cachefile$version
-   } else {
-      newerdata <- TRUE
-   }
-
-
-   if(hascache & !nocache & !newerdata){
-      cachepath <- latestVersion(cachedir,'cf')$path
-      cfs <- readRDS(cachepath)
-
-   } else {
-      datafile <- latestVersion(datadir,'cf')
-      nameDictionary <- read_yaml(glue('{datadir}/names.yaml'))
-
-      writeLines(glue('Using {datafile$filename}'))
-      cfs <- suppressWarnings(read_xlsx(datafile$path)) %>%
-         fixCfs(nameDictionary)
-
-      cfs <- cfs[!is.na(cfs$year),]
-      writeLines(glue('Caching {datafile$filename}'))
-      saveRDS(cfs,glue('{cachedir}/{datafile$filename}.rds'))
-   }
+   con <- do.call(dbConnect,con_config) 
 
    # =================================================
    # Server Logic ====================================
    # =================================================
+   alltables <- dbListTables(con)
+   CFTABLE <- latestversion(alltables,'cf')
+   ulocations <- dbGetQuery(con, glue('SELECT Location FROM {CFTABLE}')) %>%
+      unique()
+   ulocations <- sort(ulocations[[1]])
 
-   ulocations <- sort(unique(cfs$location))
    updateSelectInput(session,'location',choices = ulocations)
+
    ngroups <- 1
 
    # =================================================
    # Refresh info ====================================
    observeEvent(input$location,{
-      cfs_sub <- cfs %>%
-         filter(location == input$location)
+      if(input$location != ""){
+         query <- glue('SELECT * FROM {CFTABLE}')
+         predicate <- glue(' WHERE Location =\'{input$location}\'')
+         cfquery <- paste0(query,predicate)
+         namedict <- yaml.load_file('data/names.yaml')
+         cfs <- dbGetQuery(con, cfquery) 
+         cfs_sub <<- fixCfs(cfs,namedict)
 
-      actors <- tibble(Actors = sort(unique(cfs_sub$name)))
-      output$allactors <- renderTable(actors, striped = FALSE)
+         output$grouping <- renderUI({
+            unique_names <- unique(cfs_sub$name)
+            boxes <- list()
 
-      updateNumericInput(session,'startyear',
-                         value = min(cfs_sub$year))
-      updateNumericInput(session,'endyear',
-                         value = max(cfs_sub$year))
-      updateCheckboxGroupInput(session,'include_actors',
-                        choices = unique(cfs_sub$name))
-      updateCheckboxGroupInput(session,'grouped_actors',
-                        choices = unique(cfs_sub$name))
-      updateCheckboxGroupInput(session,'include_ids',
-                        choices = unique(sort(as.numeric(cfs_sub$id))))
-
-      output$plot <- NULL
-
-      # Grouping ui =====================================
-      output$grouping <- renderUI({
-         unique_names <- unique(cfs_sub$name)
-         boxes <- list()
-
-         for(i in 1:length(unique_names)){
-            boxes[[i]] <- selectInput(glue('actor_{i}_group'),
-                                      label = unique_names[i],
-                                      choices = c('No group'))
-         }
-         boxes
-      })
-
-      # Necessary?
-      cfs_sub <<- cfs_sub
+            for(i in 1:length(unique_names)){
+               boxes[[i]] <- selectInput(glue('actor_{i}_group'),
+                                         label = unique_names[i],
+                                         choices = c('No group'))
+            }
+            boxes
+         })
+      }
    })
 
    # =================================================
@@ -149,9 +119,6 @@ server <- function(input, output, session){
    # =================================================
    # Plot ============================================
    observeEvent(input$plot,{
-      timeline <- dget('functions/timeline.R')
-      nameCfs <- dget('functions/nameCfs.R')
-      conditionalSubset <- dget('functions/conditionalSubset.R')
 
       # Figure out naming ===============================
       tldata <- nameCfs(cfs_sub, ucdp,

@@ -1,10 +1,9 @@
 
-function(dir,name){
-   files <- list.files(dir) 
+function(files,name){
    relevantfiles <- files[str_detect(files,name)] 
 
    if(length(relevantfiles) == 0){
-      stop(glue('No files matched {name} in {dir}'))
+      stop(glue('No files matched {name}'))
    }
 
    filenumbers <- relevantfiles %>%
@@ -21,7 +20,5 @@ function(dir,name){
    } else {
       latest <- sorted[1]
    }
-   list(path = file.path(dir,names(latest)),
-        filename = names(latest),
-        version = latest)
+   names(latest)
 }

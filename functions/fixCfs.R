@@ -1,5 +1,6 @@
 
 function(cfs,nameDictionary){
+   varsToDates <- dget('functions/varsToDates.R')
    dictlookup <- function(values,dictionary){
      fixnull <- function(values){
        sapply(values, function(v){
@@ -29,6 +30,7 @@ function(cfs,nameDictionary){
 
    cfs$actor_name <- str_replace_all(cfs$actor_name,'\\s',' ')
    cfs$actor_name <- str_replace_all(cfs$actor_name,' +',' ')
+
 
    cfs$type <- dictlookup(cfs$ceasefire_type, nameDictionary$types)
    cfs$purpose <- dictlookup(cfs$purpose_1, nameDictionary$purposes)
