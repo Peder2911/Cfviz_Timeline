@@ -42,11 +42,12 @@ con_config$dr <- dr
 # ================================
 
 server <- function(input, output, session){
-   con <- do.call(dbConnect,con_config) 
 
    # =================================================
    # Server Logic ====================================
    # =================================================
+   con <- do.call(dbConnect,con_config) 
+
    alltables <- dbListTables(con)
    CFTABLE <- latestversion(alltables,'cf')
    ulocations <- dbGetQuery(con, glue('SELECT Location FROM {CFTABLE}')) %>%
@@ -57,16 +58,23 @@ server <- function(input, output, session){
 
    ngroups <- 1
 
+   dbDisconnect(con)
+
    # =================================================
    # Refresh info ====================================
    observeEvent(input$location,{
       if(input$location != ""){
+
+	 con <- do.call(dbConnect,con_config) 
+
          query <- glue('SELECT * FROM {CFTABLE}')
          predicate <- glue(' WHERE Location =\'{input$location}\'')
          cfquery <- paste0(query,predicate)
          namedict <- yaml.load_file('data/names.yaml')
          cfs <- dbGetQuery(con, cfquery) 
          cfs_sub <<- fixCfs(cfs,namedict)
+
+	 dbDisconnect(con)
 
          output$grouping <- renderUI({
             unique_names <- unique(cfs_sub$name)
