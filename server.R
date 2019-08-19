@@ -65,28 +65,33 @@ server <- function(input, output, session){
    observeEvent(input$location,{
       if(input$location != ""){
 
-	 con <- do.call(dbConnect,con_config) 
+         con <- do.call(dbConnect,con_config) 
 
          query <- glue('SELECT * FROM {CFTABLE}')
          predicate <- glue(' WHERE Location =\'{input$location}\'')
          cfquery <- paste0(query,predicate)
          namedict <- yaml.load_file('data/names.yaml')
+
          cfs <- dbGetQuery(con, cfquery) 
          cfs_sub <<- fixCfs(cfs,namedict)
 
-	 dbDisconnect(con)
+         dbDisconnect(con)
+
+         # Update inputs
+         unique_names <- unique(cfs_sub$name)
+         unique_ids <- unique(cfs_sub$id)
 
          output$grouping <- renderUI({
-            unique_names <- unique(cfs_sub$name)
             boxes <- list()
 
             for(i in 1:length(unique_names)){
                boxes[[i]] <- selectInput(glue('actor_{i}_group'),
-                                         label = unique_names[i],
-                                         choices = c('No group'))
+                                              label = unique_names[i],
+                                              choices = c('No group'))
             }
             boxes
          })
+         updateCheckboxGroupInput(session,'include_actors',choices = unique_names)
       }
    })
 
