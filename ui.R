@@ -75,9 +75,8 @@ ui <- fluidPage(
          conditionalPanel('input.showincl == true',
             actionButton('clearincl','Clear'),
             actionButton('allincl','Select all'),
-            checkboxGroupInput('include_actors','Actors',NULL)
-            #TODO re-include this?
-            #checkboxGroupInput('include_ids','IDs',NULL)
+            checkboxGroupInput('include_actors','Actors',NULL),
+            checkboxGroupInput('include_ids','IDs',NULL)
          )
       ),
       checkboxInput('debug','Debug',FALSE)

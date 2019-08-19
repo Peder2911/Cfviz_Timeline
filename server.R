@@ -18,7 +18,7 @@ shh(library(RPostgreSQL))
 
 options(warn = -1)
 
-# ================================
+# Function imports ===============================
 
 latestversion <- dget('functions/latestversion.R')
 fixCfs <- dget('functions/fixCfs.R') 
@@ -27,7 +27,9 @@ nameCfs <- dget('functions/nameCfs.R')
 conditionalSubset <- dget('functions/conditionalSubset.R')
 varsToDates <- dget('functions/varsToDates.R')
 
-# ================================
+colors <- readRDS('data/colors.rds')
+
+# Config =========================================
 fpath <- Sys.getenv('TL_CONFIG')
 if(fpath == ""){
    fpath <- 'config.Robj'
@@ -35,17 +37,14 @@ if(fpath == ""){
 config <- dget(fpath)
 con_config <- config$con
 
-# ================================
 dr <- dbDriver('PostgreSQL')
 con_config$dr <- dr
 
-# ================================
-
 server <- function(input, output, session){
+   # ================================================
+   # Initialization =================================
+   # ================================================
 
-   # =================================================
-   # Server Logic ====================================
-   # =================================================
    con <- do.call(dbConnect,con_config) 
 
    alltables <- dbListTables(con)
@@ -60,8 +59,9 @@ server <- function(input, output, session){
 
    dbDisconnect(con)
 
-   # =================================================
-   # Refresh info ====================================
+   # ================================================
+   # Refresh info ===================================
+   # ================================================
    observeEvent(input$location,{
       if(input$location != ""){
 
@@ -78,8 +78,8 @@ server <- function(input, output, session){
          dbDisconnect(con)
 
          # Update inputs
-         unique_names <- unique(cfs_sub$name)
-         unique_ids <- unique(cfs_sub$id)
+         unique_names <- sort(unique(cfs_sub$name))
+         unique_ids <- sort(unique(cfs_sub$id))
 
          output$grouping <- renderUI({
             boxes <- list()
@@ -92,13 +92,15 @@ server <- function(input, output, session){
             boxes
          })
          updateCheckboxGroupInput(session,'include_actors',choices = unique_names)
+         updateCheckboxGroupInput(session,'include_ids',choices = unique_ids)
       }
    })
 
-   # =================================================
-   # Group naming ====================================
-   # Create a panel with textboxes where group names
-   # are specified.
+   # ================================================
+   # Group naming ===================================
+   # Create a panel with textboxes where group names 
+   # are specified ==================================
+
    output$groupnames <- renderUI({
       groups <- list()
       for(group in 1:input$ngroups){
@@ -129,11 +131,12 @@ server <- function(input, output, session){
       groups
    })
 
-   # =================================================
-   # Plot ============================================
+   # ================================================
+   # Refresh plot ===================================
+   # ================================================
    observeEvent(input$plot,{
 
-      # Figure out naming ===============================
+      # Figure out naming ===========================
       tldata <- nameCfs(cfs_sub, ucdp,
                         input = input,
                         groups = groups,
@@ -141,11 +144,14 @@ server <- function(input, output, session){
       # for debug
       tee <- tldata
 
-      # Only display included ===========================
-      tldata <- conditionalSubset(tldata,input)
+      # Only display included =======================
+      tldata <- conditionalSubset(tldata, input)
 
-      # Plot ============================================
-      timelineplot <- timeline(tldata,input)
+      # Plot ========================================
+      timelineplot <- timeline(tldata,
+                               startyear = input$startyear,
+                               endyear = input$endyear,
+                               colors = colors)
       currentPlot <<- timelineplot
       output$plot <- renderPlot(timelineplot)
 
@@ -191,5 +197,7 @@ server <- function(input, output, session){
    observeEvent(input$allincl,{
       updateCheckboxGroupInput(session,'include_actors',
                                selected = unique(cfs_sub$name))
+      updateCheckboxGroupInput(session,'include_ids',
+                               selected = unique(cfs_sub$id))
    })
 }
