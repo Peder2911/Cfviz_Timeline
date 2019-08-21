@@ -49,9 +49,8 @@ server <- function(input, output, session){
 
    alltables <- dbListTables(con)
    CFTABLE <- latestversion(alltables,'cf')
-   ulocations <- dbGetQuery(con, glue('SELECT Location FROM {CFTABLE}')) %>%
+   ulocations <- unlist(dbGetQuery(con, glue('SELECT location FROM {CFTABLE}'))) %>%
       unique()
-   ulocations <- sort(ulocations[[1]])
 
    updateSelectInput(session,'location',choices = ulocations)
 
@@ -64,22 +63,21 @@ server <- function(input, output, session){
    # ================================================
    observeEvent(input$location,{
       if(input$location != ""){
-
          con <- do.call(dbConnect,con_config) 
-
-         query <- glue('SELECT * FROM {CFTABLE}')
-         predicate <- glue(' WHERE Location =\'{input$location}\'')
-         cfquery <- paste0(query,predicate)
-         namedict <- yaml.load_file('data/names.yaml')
-
-         cfs <- dbGetQuery(con, cfquery) 
-         cfs_sub <<- fixCfs(cfs,namedict)
-
+         query <- 'SELECT name,id FROM {CFTABLE}' %>%
+            paste0(' WHERE location =\'{input$location}\'') %>%
+            glue()
+         cfinfo <- dbGetQuery(con, query)
          dbDisconnect(con)
 
          # Update inputs
-         unique_names <- sort(unique(cfs_sub$name))
-         unique_ids <- sort(unique(cfs_sub$id))
+         unique_names <- cfinfo$name %>%
+            str_split(' +- +') %>%
+            do.call(c, .) %>%
+            unique() %>%
+            sort()
+
+         unique_ids <- sort(unique(cfinfo$id))
 
          output$grouping <- renderUI({
             boxes <- list()
@@ -135,32 +133,29 @@ server <- function(input, output, session){
    # Refresh plot ===================================
    # ================================================
    observeEvent(input$plot,{
+      con <- do.call(dbConnect,con_config) 
+      query <- glue('SELECT * FROM {CFTABLE} WHERE location =\'{input$location}\'')
+      cfs <- dbGetQuery(con, query)
+      dbDisconnect(con)
+      cfs$year <- year(cfs$start)
 
-      # Figure out naming ===========================
-      tldata <- nameCfs(cfs_sub, ucdp,
-                        input = input,
-                        groups = groups,
-                        usegroups = input$usegroup)
-      # for debug
-      tee <- tldata
-
-      # Only display included =======================
-      tldata <- conditionalSubset(tldata, input)
+      if(!is.null(input$include_actors)){
+         cfs <- cfs %>%
+            filter(str_detect(name, input$include_actors))
+      }
+      if(!is.null(input$include_ids)){
+         cfs <- cfs %>%
+            filter(id %in% input$include_ids)
+      }
 
       # Plot ========================================
-      timelineplot <- timeline(tldata,
+      timelineplot <- timeline(cfs,
                                startyear = input$startyear,
                                endyear = input$endyear,
                                colors = colors)
+
       currentPlot <<- timelineplot
       output$plot <- renderPlot(timelineplot)
-
-      # Debug stuff =====================================
-      output$debugdat <- renderTable(arrange(tee[c('id','year','name')], id))
-      allids <- min(tee$id):max(tee$id)
-      missingids <- allids[!allids %in% tee$id] %>%
-         glue_collapse(sep = ', ')
-      output$missingids <- renderText(glue('Missing these IDs: {missingids}'))
    })
 
    # =================================================
@@ -196,8 +191,8 @@ server <- function(input, output, session){
    })
    observeEvent(input$allincl,{
       updateCheckboxGroupInput(session,'include_actors',
-                               selected = unique(cfs_sub$name))
+                               selected = unique(cfs$name))
       updateCheckboxGroupInput(session,'include_ids',
-                               selected = unique(cfs_sub$id))
+                               selected = unique(cfs$id))
    })
 }

@@ -9,6 +9,7 @@ function(data, startyear, endyear, colors){
    n_unique_names <- length(unique(data$name))
    n_unique_colors <- length(colors)
    colors <- rep(colors, ceiling(n_unique_names / n_unique_colors)) %>% unlist()
+
    names(colors) <- NULL
    colors <- sample(colors,size = n_unique_names)
 
