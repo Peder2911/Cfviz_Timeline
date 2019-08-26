@@ -26,6 +26,9 @@ timeline <- dget('functions/timeline.R')
 nameCfs <- dget('functions/nameCfs.R')
 conditionalSubset <- dget('functions/conditionalSubset.R')
 varsToDates <- dget('functions/varsToDates.R')
+groupRename <- dget('functions/groupRename.R')
+getActorNames <- dget('functions/getActorNames.R')
+sortlist <- dget('functions/sortlist.R')
 
 colors <- readRDS('data/colors.rds')
 
@@ -71,12 +74,7 @@ server <- function(input, output, session){
          dbDisconnect(con)
 
          # Update inputs
-         unique_names <- cfinfo$name %>%
-            str_split(' +- +') %>%
-            do.call(c, .) %>%
-            unique() %>%
-            sort()
-
+         unique_names <- getActorNames(cfinfo)
          unique_ids <- sort(unique(cfinfo$id))
 
          output$grouping <- renderUI({
@@ -146,6 +144,16 @@ server <- function(input, output, session){
       if(!is.null(input$include_ids)){
          cfs <- cfs %>%
             filter(id %in% input$include_ids)
+      }
+      if(input$usegroup){
+         cinput <- isolate(reactiveValuesToList(input))
+         groupnames <- sortlist(cinput[str_detect(names(cinput), 'group_[0-9]+_name$')])
+
+         actorgroups <- sortlist(cinput[str_detect(names(cinput), 'actor_[0-9]+_group$')])
+         names(actorgroups) <- getActorNames(cfs)
+
+         actorgroups <- actorgroups[!is.na(names(actorgroups))]
+         cfs <- groupRename(cfs, groupnames, actorgroups)
       }
 
       # Plot ========================================
