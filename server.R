@@ -168,26 +168,11 @@ server <- function(input, output, session){
 
    # =================================================
    # Handle downloads ================================
-   output$download <- downloadHandler(filename = 'plot.zip',
+   output$download <- downloadHandler(filename = glue('plot.{input$plotformat}'),
       content = function(file){
-
-         dir <- tempdir()
-         stuff <- character()
-
-         if(input$separatelegend){
-
-            legend <- get_legend(currentPlot + theme(legend.position = 'right'))
-            stuff[2] <- glue('{dir}/legend.{input$plotformat}')
-            ggsave(stuff[2], legend, device = input$plotformat,
+         ggsave(file,currentPlot, device = input$plotformat,
                 height = input$plotheight, width = input$plotwidth,
                 units = input$units)
-         }
-         
-         stuff[1] <- glue('{dir}/plot.{input$plotformat}') 
-         ggsave(stuff[1],currentPlot, device = input$plotformat,
-                height = input$plotheight, width = input$plotwidth,
-                units = input$units)
-         zip(file, stuff, flags = '-r9Xj')
       }
    )
    

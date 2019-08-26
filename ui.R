@@ -11,9 +11,6 @@ ui <- fluidPage(
          ),
          column(3,
          selectInput('plotformat',NULL,c('png','svf'))
-         ),
-         column(3,
-         checkboxInput('separatelegend','Separate legend')
          )
       ),
       fluidRow(
