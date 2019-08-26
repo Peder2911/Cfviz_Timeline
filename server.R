@@ -64,69 +64,24 @@ server <- function(input, output, session){
    observeEvent(input$location,{
       if(input$location != ""){
          con <- do.call(dbConnect,con_config) 
-         query <- 'SELECT name,id FROM {CFTABLE}' %>%
+         query <- 'SELECT * FROM {CFTABLE}' %>%
             paste0(' WHERE location =\'{input$location}\'') %>%
             glue()
          cfinfo <- dbGetQuery(con, query)
          dbDisconnect(con)
 
          # Update inputs
-         unique_names <- cfinfo$name %>%
+         actorNames <<- cfinfo$name %>%
             str_split(' +- +') %>%
             do.call(c, .) %>%
             unique() %>%
             sort()
 
-         unique_ids <- sort(unique(cfinfo$id))
+         ceasefireIds <<- sort(unique(cfinfo$id))
 
-         output$grouping <- renderUI({
-            boxes <- list()
-
-            for(i in 1:length(unique_names)){
-               boxes[[i]] <- selectInput(glue('actor_{i}_group'),
-                                              label = unique_names[i],
-                                              choices = c('No group'))
-            }
-            boxes
-         })
-         updateCheckboxGroupInput(session,'include_actors',choices = unique_names)
-         updateCheckboxGroupInput(session,'include_ids',choices = unique_ids)
+         updateCheckboxGroupInput(session,'include_actors',choices = actorNames)
+         updateCheckboxGroupInput(session,'include_ids',choices = ceasefireIds)
       }
-   })
-
-   # ================================================
-   # Group naming ===================================
-   # Create a panel with textboxes where group names 
-   # are specified ==================================
-
-   output$groupnames <- renderUI({
-      groups <- list()
-      for(group in 1:input$ngroups){
-         groupname <- glue('group_{group}_name')
-         if(groupname %in% names(input)){
-            selected <- isolate(input[[groupname]])
-         } else {
-            selected <- 'Others'
-         }
-         groups[[group]] <- textInput(glue('group_{group}_name'),
-                                      label = glue('Group {group}:'),
-                                      selected)
-
-         # Really ugly, but necessary?
-         for(name in names(input)){
-            if(str_detect(name,'actor_[0-9]{1,3}_group')){
-               selected <- isolate(input[[name]])
-               if(selected > input$ngroups){
-                  selected <- 'No group'
-               }
-               updateSelectInput(session, name,
-                                 choices = c('No group',
-                                             as.character(1:input$ngroups)),
-                                 selected = selected)
-            }
-         }
-      }
-      groups
    })
 
    # ================================================
@@ -140,8 +95,14 @@ server <- function(input, output, session){
       cfs$year <- year(cfs$start)
 
       if(!is.null(input$include_actors)){
-         cfs <- cfs %>%
-            filter(str_detect(name, input$include_actors))
+         inIncluded <- sapply(cfs$name, function(names){
+            names <- names %>%
+               str_split(' +- +') %>%
+               do.call(c, .)
+            any(names %in% input$include_actors)
+         })
+
+         cfs <- cfs[inIncluded,]
       }
       if(!is.null(input$include_ids)){
          cfs <- cfs %>%
@@ -160,26 +121,11 @@ server <- function(input, output, session){
 
    # =================================================
    # Handle downloads ================================
-   output$download <- downloadHandler(filename = 'plot.zip',
+   output$download <- downloadHandler(filename = glue('plot.{input$plotformat}'),
       content = function(file){
-
-         dir <- tempdir()
-         stuff <- character()
-
-         if(input$separatelegend){
-
-            legend <- get_legend(currentPlot + theme(legend.position = 'right'))
-            stuff[2] <- glue('{dir}/legend.{input$plotformat}')
-            ggsave(stuff[2], legend, device = input$plotformat,
+         ggsave(file,currentPlot, device = input$plotformat,
                 height = input$plotheight, width = input$plotwidth,
                 units = input$units)
-         }
-         
-         stuff[1] <- glue('{dir}/plot.{input$plotformat}') 
-         ggsave(stuff[1],currentPlot, device = input$plotformat,
-                height = input$plotheight, width = input$plotwidth,
-                units = input$units)
-         zip(file, stuff, flags = '-r9Xj')
       }
    )
    
@@ -191,8 +137,8 @@ server <- function(input, output, session){
    })
    observeEvent(input$allincl,{
       updateCheckboxGroupInput(session,'include_actors',
-                               selected = unique(cfs$name))
+                               selected = actorNames)
       updateCheckboxGroupInput(session,'include_ids',
-                               selected = unique(cfs$id))
+                               selected = ceasefireIds)
    })
 }

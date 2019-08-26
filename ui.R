@@ -11,9 +11,6 @@ ui <- fluidPage(
          ),
          column(3,
          selectInput('plotformat',NULL,c('png','svf'))
-         ),
-         column(3,
-         checkboxInput('separatelegend','Separate legend')
          )
       ),
       fluidRow(
@@ -49,24 +46,6 @@ ui <- fluidPage(
          numericInput('endyear','End year',2019, max = 1989)
       ),
       tags$hr(),
-      fluidRow(
-         selectInput('naming','Naming scheme',c('Actor names','UCDP')),
-         conditionalPanel('input.naming == \'Actor names\'',
-            checkboxInput('usegroup','Group actors'))
-      ),
-
-      # Grouping ========================================
-      conditionalPanel('input.naming == \'Actor names\' && input.usegroup',
-         tags$hr(),
-         fluidRow(
-            selectInput('ngroups','Number of groups:',1:10),
-            uiOutput("groupnames")
-         ),
-         tags$hr(),
-         fluidRow(
-            uiOutput("grouping")
-         )
-      ),
 
       # Include some ====================================
       tags$hr(),
