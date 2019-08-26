@@ -10,7 +10,7 @@ ui <- fluidPage(
             downloadButton('download','Download plot')
          ),
          column(3,
-         selectInput('plotformat',NULL,c('png','svf'))
+         selectInput('plotformat',NULL,c('png','svf','eps'))
          )
       ),
       fluidRow(
