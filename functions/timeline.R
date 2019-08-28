@@ -11,7 +11,8 @@ function(data, startyear, endyear, colors){
    colors <- rep(colors, ceiling(n_unique_names / n_unique_colors)) %>% unlist()
 
    names(colors) <- NULL
-   colors <- sample(colors,size = n_unique_names)
+   colors <- colors[1:n_unique_names]
+   #colors <- sample(colors,size = n_unique_names)
 
    ggplot(data) + 
       geom_histogram(aes(x = year, fill = name), 

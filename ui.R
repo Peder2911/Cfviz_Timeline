@@ -7,10 +7,8 @@ ui <- fluidPage(
       tags$hr(),
       fluidRow(
          column(3,
-            downloadButton('download','Download plot')
-         ),
-         column(3,
-         selectInput('plotformat',NULL,c('png','svf','eps'))
+            downloadButton('downloadpng','Download png'),
+            downloadButton('downloadeps','Download eps')
          )
       ),
       fluidRow(
@@ -23,29 +21,34 @@ ui <- fluidPage(
          column(3,
          selectInput('plotunits','Units',c('cm','in'))
          )
-      ),
-      conditionalPanel('input.debug == true',
-         textOutput('missingids'),
-         tableOutput('debugdat')
       )
    ),
 
 
    sidebarPanel(
-      # =================================================
+      # Location ========================================
       fluidRow(
          selectInput('location','Location',NULL),
          actionButton('plot','Plot')
       ),
       tags$hr(),
 
-      # =================================================
+      # Time ============================================
       fluidRow(
-         #actionButton('refresh','Refresh'),
          numericInput('startyear','Start year',1989, min = 1989),
          numericInput('endyear','End year',2019, max = 1989)
       ),
+
+      # Lumping ========================================
       tags$hr(),
+
+      fluidRow(
+         column(6,
+            checkboxInput('lumpnames','Group names'),
+            sliderInput('lumpsize','Keep n:',min=0,max = 10, value = 0)
+            ),
+         column(6)
+      ),
 
       # Include some ====================================
       tags$hr(),
@@ -57,7 +60,6 @@ ui <- fluidPage(
             checkboxGroupInput('include_actors','Actors',NULL),
             checkboxGroupInput('include_ids','IDs',NULL)
          )
-      ),
-      checkboxInput('debug','Debug',FALSE)
+      )
    )
 )
