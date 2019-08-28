@@ -35,8 +35,8 @@ ui <- fluidPage(
 
       # Time ============================================
       fluidRow(
-         numericInput('startyear','Start year',1989, min = 1989),
-         numericInput('endyear','End year',2019, max = 1989)
+         numericInput('startyear','Start year',1989, min = 1989, max = 2019),
+         numericInput('endyear','End year',2019, min = 1989, max = 2019)
       ),
 
       # Lumping ========================================
