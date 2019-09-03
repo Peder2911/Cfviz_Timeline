@@ -22,6 +22,9 @@ ui <- fluidPage(
          column(3,
          selectInput('plotunits','Units',c('cm','in'))
          )
+      ),
+      fluidRow(
+         tableOutput("groupedDebug")
       )
    ),
 
@@ -44,28 +47,31 @@ ui <- fluidPage(
          )
       ),
 
-      # Lumping ========================================
+      # Binning ========================================
       tags$hr(),
       tags$h3("Names"),
-      checkboxInput('lumpnames','Group names'),
       tabsetPanel(
          tabPanel("Group",
-            tags$br(),
-            tags$p("Group actors using a custom grouping setup"),
-            actionButton('update_groups','Update!'),
-            fluidRow(
-               column(6,
-                  uiOutput("groups")
-               ),
-               column(6,
-                  uiOutput("groupnames")
+            tags$div(id = "groupingStuff",
+               tags$br(),
+               checkboxInput('usegroups','Group names'),
+               tags$p("Group actors using a custom grouping setup"),
+               tags$hr(),
+               fluidRow(
+                  column(6,
+                     uiOutput("groups")
+                  ),
+                  column(6,
+                     uiOutput("groupnames")
+                  )
                )
             )
          ),
-         tabPanel("Lump",
+         tabPanel("Bin",
             tags$br(),
-            tags$p("Include n actors while grouping others as \"other\""),
-            sliderInput('lumpsize','Keep n:',min=0,max = 10, value = 0)
+            checkboxInput('lumpnames','Bin names'),
+            tags$p("Include n actors while binning the rest as \"other\""),
+            sliderInput('lumpsize','Keep n:',min=0,max = 10, value = 3)
          ),
          tabPanel("Subset",
             tags$br(),

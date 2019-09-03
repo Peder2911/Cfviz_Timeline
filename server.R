@@ -21,13 +21,7 @@ options(warn = -1)
 
 # Function imports ===============================
 
-latestversion <- dget('functions/latestversion.R')
-fixCfs <- dget('functions/fixCfs.R') 
 timeline <- dget('functions/timeline.R')
-nameCfs <- dget('functions/nameCfs.R')
-conditionalSubset <- dget('functions/conditionalSubset.R')
-varsToDates <- dget('functions/varsToDates.R')
-sanitizeNames <- dget('functions/sanitizeNames.R')
 
 COLORS <- readRDS('data/colors.rds')
 
@@ -101,10 +95,32 @@ server <- function(input, output, session){
       con <- do.call(dbConnect,con_config) 
       cfs <- dbGetQuery(con,glue(q))
       dbDisconnect(con)
+
       cfs
 
    })
 
+   actorGrouping <- reactive({
+      if(!is.null(input$actorGrouping)){
+         input$actorGrouping %>%
+            jsonlite::fromJSON() %>%
+            dplyr::bind_rows()
+      } else {
+         message("Oh no!! ActorGrouping is null!!")
+         NULL
+      }
+   })
+   
+   groupNames <- reactive({
+      if(!is.null(input$groupNames)){
+         input$groupNames %>%
+            jsonlite::fromJSON() %>%
+            dplyr::bind_rows()
+      } else {
+         message("Oh no!! Groupnames is null!!")
+         NULL
+      }
+   })
 
    observeEvent(input$location,{
          cfinfo <- info()
@@ -118,28 +134,26 @@ server <- function(input, output, session){
 
    output$groups <- renderUI({
       cfinfo <- info()
-      cfinfo$actor <- sanitizeNames(cfinfo$actor) 
+      actornames <- sort(unique(cfinfo$actor))
+      names(actornames) <- NULL
 
-      groups <- lapply(sort(unique(cfinfo$actor)), function(actor){
-         message(actor)
-         tags$div(id = glue("{actor}"), class = "actor_grouping_box",
-            selectInput(glue("{actor}_group"),
-                        glue('{actor} group'),
-                        1:NGROUPS)
-         )
+      groups <- lapply(1:NGROUPS, function(i){
+         selectInput(glue('groupActors_{i}'),
+                     glue("Group {i} actors"), 
+                     choices = actornames, selected = NULL,
+                     multiple = TRUE, selectize = TRUE)
       })
-      groups$id <- "actor_grouping"
+
+      groups$id <- "actorGroups"
       do.call(tags$div, groups)
    })
 
    output$groupnames <- renderUI({
-      groups <- lapply(1:NGROUPS, function(group){
-         tags$div(id = glue("group_{group}_name_box"), class = "group_name_box",
-            textInput(glue("group_{group}_name"),
-                      glue('Group {group} name'))
-         )
+      groups <- lapply(1:NGROUPS, function(i){
+         textInput(glue("groupName_{i}"),
+                   glue("Group {i} name"))
       })
-      groups$id <- "group_names"
+      groups$id <- "groupNames"
       do.call(tags$div, groups)
    })
 
@@ -155,7 +169,16 @@ server <- function(input, output, session){
       if(!is.null(input$include_ids)){
          cfs <- filter(cfs, id %in% input$include_ids)
       }
-      if(input$lumpnames){
+
+      if(input$usegroups){
+         cfs <- merge(cfs, actorGrouping(), by='name', all.x = TRUE) %>%
+            merge(groupNames(), by = 'group', all.x = TRUE)
+         cfs$name <- ifelse(is.na(cfs$groupname),
+                            cfs$name,
+                            cfs$groupname)
+         cfs$groupname <- NULL
+         cfs$group <- NULL
+      } else if(input$lumpnames){
          cfs$name <- fct_lump(cfs$name,n = input$lumpsize)
       }
 
