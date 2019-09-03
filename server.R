@@ -102,9 +102,13 @@ server <- function(input, output, session){
 
    actorGrouping <- reactive({
       if(!is.null(input$actorGrouping)){
-         input$actorGrouping %>%
-            jsonlite::fromJSON() %>%
-            dplyr::bind_rows()
+         json <- input$actorGrouping %>%
+            jsonlite::fromJSON()
+         if(length(json) > 0){
+            dplyr::bind_rows(json)
+         } else {
+            NULL
+         }
       } else {
          message("Oh no!! ActorGrouping is null!!")
          NULL
@@ -113,9 +117,13 @@ server <- function(input, output, session){
    
    groupNames <- reactive({
       if(!is.null(input$groupNames)){
-         input$groupNames %>%
-            jsonlite::fromJSON() %>%
-            dplyr::bind_rows()
+         json <- input$groupNames %>%
+            jsonlite::fromJSON()
+         if(length(json) > 0){
+            dplyr::bind_rows(json)
+         } else {
+            NULL
+         }
       } else {
          message("Oh no!! Groupnames is null!!")
          NULL
@@ -171,13 +179,20 @@ server <- function(input, output, session){
       }
 
       if(input$usegroups){
-         cfs <- merge(cfs, actorGrouping(), by='name', all.x = TRUE) %>%
-            merge(groupNames(), by = 'group', all.x = TRUE)
-         cfs$name <- ifelse(is.na(cfs$groupname),
-                            cfs$name,
-                            cfs$groupname)
-         cfs$groupname <- NULL
-         cfs$group <- NULL
+         grouping <- actorGrouping()
+         groupnaming <- groupNames()
+
+         if(!any(sapply(list(grouping,groupnaming), is.null))){
+            cfs <- merge(cfs, actorGrouping(), by='name', all.x = TRUE) %>%
+               merge(groupNames(), by = 'group', all.x = TRUE)
+            cfs$name <- ifelse(is.na(cfs$groupname),
+                               cfs$name,
+                               cfs$groupname)
+            cfs$groupname <- NULL
+            cfs$group <- NULL
+         } else {
+
+         }
       } else if(input$lumpnames){
          cfs$name <- fct_lump(cfs$name,n = input$lumpsize)
       }
