@@ -1,5 +1,6 @@
 
 ui <- fluidPage(
+   includeScript('js/grouping.js'),
    mainPanel(
       fluidRow(
          plotOutput('plot')
@@ -35,30 +36,48 @@ ui <- fluidPage(
 
       # Time ============================================
       fluidRow(
-         numericInput('startyear','Start year',1989, min = 1989, max = 2019),
-         numericInput('endyear','End year',2019, min = 1989, max = 2019)
+         column(6,
+            numericInput('startyear','Start year',1989, min = 1989, max = 2019)
+         ),
+         column(6,
+            numericInput('endyear','End year',2019, min = 1989, max = 2019)
+         )
       ),
 
       # Lumping ========================================
       tags$hr(),
-
-      fluidRow(
-         column(6,
-            checkboxInput('lumpnames','Group names'),
+      tags$h3("Names"),
+      checkboxInput('lumpnames','Group names'),
+      tabsetPanel(
+         tabPanel("Group",
+            tags$br(),
+            tags$p("Group actors using a custom grouping setup"),
+            actionButton('update_groups','Update!'),
+            fluidRow(
+               column(6,
+                  uiOutput("groups")
+               ),
+               column(6,
+                  uiOutput("groupnames")
+               )
+            )
+         ),
+         tabPanel("Lump",
+            tags$br(),
+            tags$p("Include n actors while grouping others as \"other\""),
             sliderInput('lumpsize','Keep n:',min=0,max = 10, value = 0)
-            ),
-         column(6)
-      ),
-
-      # Include some ====================================
-      tags$hr(),
-      fluidRow(
-         checkboxInput('showincl','Show included'),
-         conditionalPanel('input.showincl == true',
-            actionButton('clearincl','Clear'),
-            actionButton('allincl','Select all'),
-            checkboxGroupInput('include_actors','Actors',NULL),
-            checkboxGroupInput('include_ids','IDs',NULL)
+         ),
+         tabPanel("Subset",
+            tags$br(),
+            tags$p("Only show certain ceasefires, or actors"),
+            fluidRow(
+               column(6,
+                  checkboxGroupInput('include_actors','Actors',NULL)
+               ),
+               column(6,
+                  checkboxGroupInput('include_ids','IDs',NULL)
+               )
+            )
          )
       )
    )

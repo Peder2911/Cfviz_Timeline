@@ -27,6 +27,7 @@ timeline <- dget('functions/timeline.R')
 nameCfs <- dget('functions/nameCfs.R')
 conditionalSubset <- dget('functions/conditionalSubset.R')
 varsToDates <- dget('functions/varsToDates.R')
+sanitizeNames <- dget('functions/sanitizeNames.R')
 
 COLORS <- readRDS('data/colors.rds')
 
@@ -34,6 +35,8 @@ HEADTABLE <<- 'head'
 LOCATIONSTABLE <<- 'locations'
 CEASEFIRESTABLE <<- 'ceasefires'
 ACTORSTABLE <<- 'actors'
+
+NGROUPS <- 10
 
 # Config =========================================
 fpath <- Sys.getenv('TL_CONFIG')
@@ -59,7 +62,7 @@ server <- function(input, output, session){
    updateSelectInput(session,'location',choices = ulocations)
 
    # Get country-specific info ====================== 
-   observeEvent(input$location,{
+   info <- reactive({
       if(input$location != ''){
          variables <- c('{CEASEFIRESTABLE}.cf_id as id',
                         '{ACTORSTABLE}.actor_name as actor',
@@ -74,30 +77,15 @@ server <- function(input, output, session){
                "
 
          con <- do.call(dbConnect,con_config) 
-         cfinfo <- dbGetQuery(con,glue(q))
+         res <- dbGetQuery(con,glue(q))
          dbDisconnect(con)
-         if(nrow(cfinfo) == 0){
-            stop(glue(q))
-         }
-
-         updateCheckboxGroupInput(session,'include_actors',
-                                  choices = unique(cfinfo$actor))
-         updateCheckboxGroupInput(session,'include_ids',
-                                  choices = unique(cfinfo$id))
-
-         output$grouping <- renderUI({
-            name_acid <- unique(cfinfo[,c('actor','acid')])
-            apply(name_acid, 1, function(r){
-               selectInput(glue("{r['acid']}_group"),
-                           label = r['actor'],
-                           choices = c('No group'))
-            })
-         })
-      } 
+         res
+      } else {
+         NULL
+      }
    })
 
-   # Update plot (change to enterpress) =============
-   observeEvent(input$plot,{
+   ceasefires <- reactive({
       variables <- c('{CEASEFIRESTABLE}.cf_id as id',
                      '{CEASEFIRESTABLE}.cf_effect_yr as year',
                      '{ACTORSTABLE}.actor_name as name')
@@ -113,15 +101,51 @@ server <- function(input, output, session){
       con <- do.call(dbConnect,con_config) 
       cfs <- dbGetQuery(con,glue(q))
       dbDisconnect(con)
+      cfs
 
-      groups <- data.frame(acid=character(), group =character())
-      for(n in names(input)){
-         if(grepl("_group$", n)){
-            grp <- list(acid = gsub("_group$","",n),
-                        group = input[[n]])
-            groups <- rbind(groups,grp)
+   })
+
+
+   observeEvent(input$location,{
+         cfinfo <- info()
+         if(!is.null(cfinfo)){
+            updateCheckboxGroupInput(session,'include_actors',
+                                     choices = sort(unique(cfinfo$actor)))
+            updateCheckboxGroupInput(session,'include_ids',
+                                     choices = sort(unique(cfinfo$id)))
          }
-      }
+   })
+
+   output$groups <- renderUI({
+      cfinfo <- info()
+      cfinfo$actor <- sanitizeNames(cfinfo$actor) 
+
+      groups <- lapply(sort(unique(cfinfo$actor)), function(actor){
+         message(actor)
+         tags$div(id = glue("{actor}"), class = "actor_grouping_box",
+            selectInput(glue("{actor}_group"),
+                        glue('{actor} group'),
+                        1:NGROUPS)
+         )
+      })
+      groups$id <- "actor_grouping"
+      do.call(tags$div, groups)
+   })
+
+   output$groupnames <- renderUI({
+      groups <- lapply(1:NGROUPS, function(group){
+         tags$div(id = glue("group_{group}_name_box"), class = "group_name_box",
+            textInput(glue("group_{group}_name"),
+                      glue('Group {group} name'))
+         )
+      })
+      groups$id <- "group_names"
+      do.call(tags$div, groups)
+   })
+
+   # Update plot (change to enterpress) =============
+   observeEvent(input$plot,{
+      cfs <- ceasefires()
 
       # Filtering ======================================
       if(!is.null(input$include_actors)){
