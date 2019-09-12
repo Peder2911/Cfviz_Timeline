@@ -219,12 +219,12 @@ server <- function(input, output, session){
    # Handle downloads ================================
    output$downloadpng <- downloadHandler(filename = glue('plot.png'),
       content = function(file){
-         ggsave(file,currentPlot, device = 'png')
+         ggsave(file,currentPlot, device = 'png',height = 6, width = 18.9, unit = 'in')
       }
    )
    output$downloadeps <- downloadHandler(filename = glue('plot.eps'),
       content = function(file){
-         ggsave(file,currentPlot, device = 'eps')
+         ggsave(file,currentPlot, device = 'eps', height = 6, width = 18.9, unit = 'in')
       }
    )
    
